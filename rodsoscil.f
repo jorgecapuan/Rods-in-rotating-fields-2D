@@ -6,10 +6,11 @@
         integer step,k,l,i,j,n,countrat(nmol),Nbonds(nmol),LL(nmol)
 !	integer nmolaux,ndimaux,NAaux
 	integer rbin,h,sizeHistRdf,countRdf,countpol,countt,countpol2
+	integer countvel,countvel2
 	
         Real*8 r(ndim,nmol),y_box,s(ndim,nmol),Polim2
         Real*8 vmagli,mominert,vmagrot,u(ndim,nmol),ddx,ddy
-	Real*8 rsx(NA,nmol),rsy(NA,nmol),D(NA),usum
+	Real*8 rsx(NA,nmol),rsy(NA,nmol),D(NA),usum,ubonly,ubonly2
 	Real*8 ra(ndim,nmol),kienergy,totenergy,potenergy
 	Real*8 skienergy,sig,MomLi,tempinst,pi,toten,kinen,poten
 	Real*8 FSX(NA,nmol),FSY(NA,nmol),g(ndim,nmol),sumaveg(7)
@@ -27,21 +28,24 @@
         Real*8 spx(60000,nmol),spy(60000,nmol),corrmi(60000)
 	Real*8 magcorr(10000),nbondaver,kk1,jj1,kk2,jj2
         REal*8 gamape,gamapa,gamarot,corpe,corpa,corrot,facrot
-	integer switchDiff
+	integer switchDiff,counthe2
 	integer kvid,countRdf2,m,nsamples, countcoran, countcoran2
     
         integer switch,nsamp,ntel,ntime(60000),t0,tt0,time0(60000)
-        integer t,t0max,tmax
+        integer t,t0max,tmax,counthe,countfre,countfre2
         Real*8 dtime,dt,sx0(nmol,60000),Difftheta(10000)
         Real*8 delt,sy0(nmol,60000),facpe,facpa,VXI,VYI,vacf(60000)
         Real*8 thetap(10000,nmol),Diffpa(10000),Diffpe(10000)
-        
-
+        REal*8 histVel(100000),histVel2(100000)
+        REAL*8 histfre(10000),histfre2(10000)
+       
 	character (len=13) nome_arq_1
         character (len=2) nome_arq_2
         character (len=15) nome_arq_total
         character (len=18) nome_arq_3
         character (len=20) nome_arq_total2
+       
+
 	COMMON /aleat/seed
 	 Common /link1/MomLi
 !	Common /link2/ra
@@ -68,6 +72,12 @@
 	kvid = 0 
 	countRdf = 0
 	countRdf2 = 0
+	countvel = 0
+	countvel2 = 0
+	countfre=0
+	countfre2 =0
+	counthe = 0
+	counthe2 = 0
 	countpol = 0
 	countpol2 = 0
 	countt = 0
@@ -156,7 +166,7 @@
 	 enddo
 !	write(3,'(I5,e20.8)') l,dsqrt(rv(1,l)**2+rv(2,l)**2.)
         step = 0
-	Call Force (usum,rsx,rsy,FSX,FSY,B,s)
+	Call Force (ubonly,usum,rsx,rsy,FSX,FSY,B,s)
 
 	Call ConverForTor (mominert,D,r,ra,s,sa,FSX,FSY,u,B,rv,1)
         corpe = 0.839d0 + 0.185d0/dble(NA) + 0.233d0/dble(NA)**2 
@@ -194,7 +204,7 @@
 	  Call ConvertPosi (D,r,s,rsx,rsy)
 	  Call ApplyPBC(y_box,rsx,rsy)
 
-          Call Force (usum,rsx,rsy,FSX,FSY,B,s)
+          Call Force (ubonly,usum,rsx,rsy,FSX,FSY,B,s)
          
 	  Call ConverForTor (mominert,D,r,ra,s,sa,FSX,FSY,u,B,rv,2)
 	  kienergy = 0.d0
@@ -216,6 +226,7 @@
            enddo
         kienergy = 0.5d0*kienergy/dble(nmol)
 	potenergy = usum/dble(nmol*NA)
+	ubonly2 = ubonly/dble(nmol*NA)
 	totenergy = kienergy + potenergy
 	tempinst = 2.d0*kienergy/3.d0
         
@@ -238,8 +249,8 @@
 	  
       if(mod(step,2000).eq.0.d0)Write(*,'(I10,4E20.8)')step,
      :totenergy,potenergy,kienergy,tempinst
-      if(mod(step,2000).eq.0.d0)Write(4,'(I10,4E20.8)')step,totenergy
-     :,potenergy,kienergy,tempinst
+      if(mod(step,2000).eq.0.d0)Write(4,'(I10,5E20.8)')step,totenergy
+     :,potenergy,kienergy,tempinst,ubonly2
 
 !	If (step.le.50000) then
 	IF (P.eq.1) then
@@ -302,9 +313,14 @@
 	
 	
 
-      If(mod(step,1000).eq.0)Call EvalRDF(LL,countRdf,countRdf2,r,
+      If(mod(step,10).eq.0) then
+      Call EvalRDF(LL,countRdf,countRdf2,r,
      :y_box,histRdf,histRdf2,histCom,histCom2,s)
-	
+      call Evalphaldist(countVel,countVel2,rv,histVel,histVel2
+     :,step,s,u)
+      call Evalfreqldist(countfre,countfre2,u,histfre
+     :,histfre2,step,s)
+      endif
 	toten = toten + totenergy
 	poten = poten + potenergy
 	kinen = kinen + kienergy       
@@ -347,7 +363,7 @@
 	Enddo ! Steps
 	
 	
-    
+     
 		
 !	Do i=1,nmol
 !	  Do j=1,NA		
@@ -502,7 +518,7 @@
 
          
 !####################################################################
-       Subroutine Force (usum,rsx,rsy,FSX,FSY,B,s)
+       Subroutine Force (usum,ubonly,rsx,rsy,FSX,FSY,B,s)
       implicit none
 	include 'constants.f'
       integer i,j,B1,B2,step,Nbonds(nmol),sumbond(6)
@@ -512,7 +528,7 @@
       Real*8 dx,dy,s(ndim,nmol),rsx(NA,nmol),rsy(NA,nmol),y_box,sFac
       Real*8 rcuti,modrcut,a1cut,a2cut,a4,rrrcuti,bxi,byi,bxj,byj
       Real*8 sumaveg(7),sumvegpol(7),sumveg2(7),nbondaver,
-     :sumbondreal(7)
+     :sumbondreal(7),ubonly
 	 Common /link2/step
 !	   open(222,file ='ddd.dat')
         
@@ -563,7 +579,7 @@
 	enddo
 
 	usum = 0.d0
-	
+	ubonly = 0.d0
         Do i =1,nmol-1
 		
 	  Do j= i+1,nmol
@@ -659,8 +675,10 @@
 
 
         Do j = 1,nmol
-        usum =usum-mi*NA*B0*(s(1,j)*dcos(omega*deltaT*(step))+
-     :s(2,j)*dsin(omega*deltaT*(step)))
+  !      usum =usum-mi*NA*B0*(s(1,j)*dcos(omega*deltaT*(step))+
+  !   :s(2,j)*dsin(omega*deltaT*(step)))
+      ubonly = ubonly - mi*NA*B0*(s(1,j)*dcos(omega*deltaT*(step))+
+     :s(2,j)*dsin(omega*deltaT*(step))) 
         !obs (mi/NA) x NA x B0 = mi x B0 
         
         enddo
@@ -2404,6 +2422,7 @@ c
        include 'constants.f'
        integer i,j,B1,B2,Nbond(nmol),aa(nmol,nmol)
        real*8 dx,dy,rsx(NA,nmol),rsy(NA,nmol),modr,rr,nbondaver
+       
        do j = 1,nmol
        do i = 1,nmol
         aa(i,j) = 0
@@ -2446,3 +2465,252 @@ c
 !	endif
         Return
         end
+!#####################################################################
+ !phase difference distribution
+!###################################################################
+        Subroutine Evalphaldist(countVel,countVel2,rv,histVel,histVel2
+     :,step,s,u)
+	implicit none
+	include 'constants.f'
+	integer j,k,countVel,countVel2,sizeHistvel
+	Real*8 deltaV,histSum,vv,histVel(100000),histVel2(100000)
+	Real*8 rbin,rangeVel,rv(ndim,nmol),pi,s(2,nmol),u(2,nmol),ww
+	Real*8 vxv,difangle
+	integer n,limitVel,step
+	pi = 4.d0*atan(1.d0)
+
+	rangeVel = 2.d0*pi
+	limitVel = 10	
+	deltaV = pi/96.d0
+	sizeHistvel = int(rangeVel/deltaV) 	
+	countVel = countVel + 1	
+	
+	if(countVel.eq.1) then
+
+	Do j=1,sizeHistvel
+	histVel(j) = 0.d0
+	
+	enddo
+	endif
+
+	if(countVel2.eq.1) then
+
+	Do j=1,sizeHistvel
+	histVel2(j) = 0.d0
+	
+	enddo
+	endif
+
+	
+!	deltaV = rangeVel/sizeHistVel
+	
+      Do n=1,nmol
+       ww = u(2,n)/s(1,n)
+  !     if (ww<0.d0) then
+!	vv = s(1,n)*dcos(omega*deltaT*(step))+
+!     :s(2,n)*dsin(omega*deltaT*(step))
+!     	 vxv= dcos(omega*deltaT*(step))*s(2,n)-
+!     :dsin(omega*deltaT*(step))*s(1,n)
+      vv = atan2(dsin(omega*deltaT*(step)),dcos(omega*deltaT*(step)))
+      vxv= atan2(s(2,n),s(1,n))
+	difangle = vv - vxv !o angulo do campo é sempre maior que o angulo das barras
+	if(difangle < 0.d0)difangle = difangle + 2.d0*pi 
+	 
+	 j = dint(difangle/deltaV) +1
+	 histVel(j) = histVel(j) + 1.d0	!	write(*,*)(dsqrt(vv)/deltaV)
+  
+!	endif
+	enddo	
+
+	If(countVel.eq.limitVel) then
+	  countVel2 = countVel2 + 1	
+		histSum = 0.d0
+		open(90,file='phasdis.dat')	
+	        open(120,file='phasdistotal.dat')
+	
+        	Do j=1,sizeHistvel
+		histSum = histSum + histVel(j)
+		enddo
+	        
+		Do k =1,sizeHistvel
+	        rbin = (k)*deltaV
+		histVel(k) = histVel(k)/dble(histSum) 
+	 	histVel2(k) = histVel2(k) + histVel(k)
+		write(90,*)rbin,histVel(k)
+                write(120,*)rbin,histVel2(k)/dble(countVel2)
+		enddo
+	close(120)
+        close(90)
+	countVel = 0.d0
+	endif
+	
+	return
+	end
+	!#####################################################################
+ !omega distribution
+!###################################################################
+        Subroutine Evalfreqldist(countfre,countfre2,u,histfre
+     :,histfre2,step,s)
+	implicit none
+	include 'constants.f'
+	integer j,k,countfre,countfre2,sizeHistfre
+	Real*8 deltaV,histSum,vv,histfre(100000),histfre2(100000)
+	Real*8 rbin,rangefremin,rv(ndim,nmol),pi,s(2,nmol),rangefremax
+	Real*8 u(2,nmol)
+	integer n,limitfre,step
+	pi = 4.d0*atan(1.d0)
+
+	rangefremax = 40.d0
+	rangefremin = -40.d0
+	limitfre = 1000	
+	deltaV = (rangefremax - rangefremin)/100
+	sizeHistfre = int((rangefremax - rangefremin)/deltaV) 	
+	countfre = countfre + 1	
+	
+	if(countfre.eq.1) then
+
+	Do j=1,sizeHistfre
+	histfre(j) = 0.d0
+	
+	enddo
+	endif
+
+	if(countfre2.eq.1) then
+
+	Do j=1,sizeHistfre
+	histfre2(j) = 0.d0
+	
+	enddo
+	endif
+
+	
+!	deltaV = rangefre/sizeHistfre
+	
+      Do n=1,nmol
+	 vv = u(2,n)/s(1,n)
+     
+	 j = dint((vv-rangefremin)/deltaV) +1
+	!	write(*,*)(dsqrt(vv)/deltaV)
+	 !  pause
+!	If (j.gt.sizeHistfre) j = sizeHistfre
+	 histfre(j) = histfre(j) + 1.d0
+  
+	enddo	
+
+	If(countfre.eq.limitfre) then
+	  countfre2 = countfre2 + 1	
+		histSum = 0.d0
+		open(1832,file='freqdis.dat')	
+	        open(1833,file='freqdistotal.dat')
+	
+        	Do j=1,sizeHistfre
+		histSum = histSum + histfre(j)
+		enddo
+	        
+		Do k =1,sizeHistfre
+	        rbin = (k*deltaV+rangefremin)
+		histfre(k) = histfre(k)/dble(histSum) 
+	 	histfre2(k) = histfre2(k) + histfre(k)
+		write(1832,*)rbin,histfre(k)
+                write(1833,*)rbin,histfre2(k)/dble(countfre2)
+		enddo
+	close(1832)
+        close(1833)
+	countfre = 0.d0
+	endif
+	
+	return
+	end
+!###################################################################
+!###################################################################
+        SUBROUTINE CalculateDistribution(s,f,f2,counthe,counthe2,
+     :step)
+  	include 'constants.f'
+  	REAL*8, DIMENSION(nmol) :: phi
+  	REAL*8 :: DeltaPhi
+
+  !	REAL*8, DIMENSION(:), ALLOCATABLE :: SumTheta 
+  	INTEGER :: i, n, counthe,counthe2,sizeHistvel
+  	REAL*8 ::  psi,pi
+  	REAL*8, DIMENSION(2,nmol), INTENT(IN) :: s
+  	REAL*8 :: f(10000)
+        REAL*8 :: f2(10000),rangeVel
+	  ! Allocate memory for the distribution array
+  
+ 
+  ! Initialize the distribution array
+  	
+  	f = 0.0
+  	f2 = 0.0
+  	pi = 4.d0*atan(1.d0)
+	limitvel = 1000
+	DeltaPhi = pi/96.d0
+	rangeVel = 2*pi
+	sizeHistvel = int(rangeVel/DeltaPhi)
+	counthe = counthe +1
+	if (mod(counthe,limitvel).eq.0) then
+  ! Loop over all particles
+  	DO i = 1, nmol
+  	s_i_x = s(1,i)
+  	s_i_y = s(2,i)
+  	B_x = dcos(omega*deltaT*(step))
+  	B_y = dsin(omega*deltaT*(step))
+  	
+  	xpr = s_i_x * B_y - s_i_y * B_x
+       dpr = s_i_x * B_x + s_i_y * B_y
+  	phi(i) = acos(dpr)!atan2(xpr, dpr)
+    ! Calculate n for the current phi_i
+    	
+    
+    	n = INT(phi(i) / DeltaPhi) 
+	
+   ! 	write(*,*)n
+    	
+	counthe2 = counthe2 +1
+    ! Calculate the Heaviside function values
+       
+    	IF (phi(i) >= REAL(n) * DeltaPhi .AND. phi(i) < REAL(n + 1) *
+     :DeltaPhi) THEN
+ !     	psi = phi(i) - REAL(n) * DeltaPhi
+      f(n)=f(n) + (StepFunction(phi(i) - n * DeltaPhi)-
+     :StepFunction(phi(i) - (n+1) * DeltaPhi))/ (REAL(nmol)*DeltaPhi)
+    	ENDIF
+  	END DO
+	
+  ! Normalize and store the distribution values
+  	DO n = 1, sizeHistvel
+    	f2(n)=f2(n)+f(n)
+  	END DO
+!###############################333
+	! Open a file for writing
+  	OPEN(1248, FILE='angdisheaviside.dat', STATUS='UNKNOWN')
+
+  ! Write the data to the file
+  	DO n = 1, sizeHistvel
+    	WRITE(1248, *) (REAL(n-0.5) * DeltaPhi, f2(n)/dble(counthe2))
+  	END DO 
+
+  ! Close the file
+  	CLOSE(1248)
+	endif
+  ! Deallocate the memory
+  	      
+  	!  	DEALLOCATE(SumTheta)
+!#################################
+	END SUBROUTINE
+
+	FUNCTION StepFunction(x)
+  	REAL*8, INTENT(IN) :: x
+  	REAL*8 :: result
+
+  ! Heaviside step function
+  	IF (x >= 0.0) THEN
+    	result = 1.0
+  	ELSE
+    	result = 0.0
+  	ENDIF
+
+  	StepFunction = result
+	END FUNCTION
+    
+        
