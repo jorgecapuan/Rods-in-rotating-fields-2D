@@ -13,15 +13,15 @@
 	integer final_step
 	Parameter (final_step = 7.d6 ) ! Number os steps
 	integer stepaverage
-	Parameter (stepaverage = 2.d6) ! Steps of Relaxation
+	Parameter (stepaverage = 1.d6) ! Steps of Relaxation
 	Real*8 areafrac
 	Parameter (areafrac = 1.d-1 )!area fraction
 	Real*8 x_box
 	Parameter (x_box=dsqrt(rodareatot/areafrac)) ! length of the box {-x_box/2, x_box/2} 
 	Real*8 omega
-         Parameter (omega = 5.d0)
+	Parameter (omega = 30.d0)
 	Real*8 B0
-         Parameter (B0 = 10.d0)
+	Parameter (B0 = 10.d0)
 	Real*8 temp
 	Parameter (temp= 1.d0) ! temperature
 	Real*8 deltaT
@@ -36,4 +36,3 @@
 	Parameter (configtest = 100)
 	Real*8 mult
 	Parameter (mult = 2.d0)
-
