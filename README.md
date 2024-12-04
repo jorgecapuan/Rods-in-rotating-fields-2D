@@ -1,2 +1,2 @@
-Rename input_---.dat file to "constants.f"
+The input file is "constants.f"
 the Fortran souce code is rodoscill.f
